@@ -1,0 +1,375 @@
+{
+  "meta": {
+    "generatedAt": "2026-02-27T00:00:00.000Z",
+    "tool": "Wallet Workshop Studio",
+    "version": "2.0"
+  },
+  "project": {
+    "name": "Carte Suivi de livraison",
+    "brand": "Colissimo",
+    "description": "Carte Wallet multi-statuts pour suivre une livraison (iOS/Android).",
+    "timezone": "Europe/Paris",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "languages": [
+      "fr",
+      "en"
+    ],
+    "workshop": {
+      "sessions": [
+        {
+          "id": "session_1",
+          "date": "",
+          "goal": "Atelier cadrage"
+        },
+        {
+          "id": "session_2",
+          "date": "",
+          "goal": "Atelier technique"
+        }
+      ],
+      "participants": [
+        {
+          "id": "p_1",
+          "name": "Métier",
+          "role": "Owner",
+          "team": "Brand"
+        },
+        {
+          "id": "p_2",
+          "name": "Tech",
+          "role": "Integration",
+          "team": "IT"
+        }
+      ]
+    }
+  },
+  "walletPlatform": {
+    "vendor": "Captain Wallet",
+    "baseDomain": "captainwallet.com",
+    "accountId": "colissimo",
+    "projectId": "fr_FR",
+    "campaigns": [
+      {
+        "id": "loyalty",
+        "name": "Suivi livraison multi-statuts",
+        "type": "main",
+        "description": ""
+      },
+      {
+        "id": "void",
+        "name": "Carte anonymisée (void)",
+        "type": "void",
+        "description": ""
+      }
+    ]
+  },
+  "journey": {
+    "contexts": {
+      "authenticated": true,
+      "unauthenticated": false
+    },
+    "touchpoints": [
+      {
+        "id": "tp_1",
+        "channel": "email",
+        "context": "authenticated",
+        "ctaLabelFr": "Ajouter au Wallet",
+        "ctaLabelEn": "Add to Wallet",
+        "notes": ""
+      },
+      {
+        "id": "tp_2",
+        "channel": "web",
+        "context": "authenticated",
+        "ctaLabelFr": "Ajouter au Wallet",
+        "ctaLabelEn": "Add to Wallet",
+        "notes": ""
+      }
+    ],
+    "desktop": {
+      "useLandingWithQr": true,
+      "notes": "Si clic desktop : afficher une landing avec QR code pour installation mobile."
+    }
+  },
+  "entrypoint": {
+    "params": {
+      "identifier": "user[identifier]",
+      "channel": "channel",
+      "tag": "tag"
+    },
+    "examples": {
+      "identifier": "123456789ABCD",
+      "channel": "email",
+      "tag": "newsletter"
+    }
+  },
+  "security": {
+    "mode": "sha256",
+    "urlEncodingRequired": true,
+    "sha256": {
+      "salt": "",
+      "computeWhere": "server",
+      "signatureParam": "signature",
+      "previewInBrowser": false
+    },
+    "aes256cbc": {
+      "keyB64": "",
+      "ivB64": "",
+      "payloadTemplate": "identifier={{identifier}}&channel={{channel}}&tag={{tag}}",
+      "padding": "pkcs7",
+      "dataParam": "data",
+      "computeWhere": "server",
+      "previewInBrowser": false
+    }
+  },
+  "flows": {
+    "update": {
+      "transport": "api",
+      "cwUpdateMode": "standard"
+    },
+    "optin": {
+      "transport": "api"
+    },
+    "anonymize": {
+      "transport": "api",
+      "voidCampaignId": "void"
+    },
+    "merge": {
+      "transport": "api"
+    }
+  },
+  "interfaces": {
+    "captainWalletApi": {
+      "env": {
+        "dev": {
+          "oauthTokenUrl": "https://qlf-api.captainwallet.com/oauth/token",
+          "apiBaseUrl": "https://qlf-api.captainwallet.com"
+        },
+        "prod": {
+          "oauthTokenUrl": "https://api.captainwallet.com/oauth/token",
+          "apiBaseUrl": "https://api.captainwallet.com"
+        }
+      },
+      "oauth": {
+        "scope": "pass-owner webhooks",
+        "tokenTtlSeconds": 3600,
+        "cacheRecommended": true
+      }
+    },
+    "sourceSystem": {
+      "name": "API Colissimo",
+      "apiBaseUrl": "TBD",
+      "timeoutSlaMs": 2000,
+      "authNote": "",
+      "endpoints": {
+        "getCustomer": "TBD",
+        "optin": "TBD",
+        "docs": ""
+      }
+    },
+    "sftp": {
+      "host": "sftp.captainwallet.com",
+      "port": 2432,
+      "toWalletDir": "/ToWallet",
+      "fromWalletDir": "/FromWallet",
+      "username": "",
+      "password": "",
+      "notes": "Identifiants fournis par Captain Wallet via canal sécurisé."
+    },
+    "ipAllowlist": {
+      "note": "Voir la liste IP CW à jour et l'ajouter au firewall / WAF.",
+      "source": ""
+    }
+  },
+  "dataContract": {
+    "timezonePolicy": "Par défaut UTC. Si un autre fuseau est utilisé, le préciser et l'appliquer sur toutes les dates.",
+    "fields": [
+      {
+        "sourceField": "TBD",
+        "walletField": "user.identifier",
+        "type": "string",
+        "format": null,
+        "required": true,
+        "description": "Identifiant pivot (colis).",
+        "example": "123456789ABCD"
+      },
+      {
+        "sourceField": "TBD",
+        "walletField": "user.status",
+        "type": "string",
+        "format": null,
+        "required": true,
+        "description": "Statut livraison.",
+        "example": "Acheminement"
+      },
+      {
+        "sourceField": "TBD",
+        "walletField": "user.dateLivraison",
+        "type": "date",
+        "format": "JJ/MM/AAAA",
+        "required": false,
+        "description": "Date livraison (format JJ/MM/AAAA).",
+        "example": "12/02/2026"
+      },
+      {
+        "sourceField": "TBD",
+        "walletField": "user.expediteur",
+        "type": "string",
+        "format": null,
+        "required": false,
+        "description": "Nom de l'expéditeur (max 25).",
+        "example": "Colissimo"
+      },
+      {
+        "sourceField": "TBD",
+        "walletField": "user.AdresseLieuDeRetrait",
+        "type": "string",
+        "format": null,
+        "required": false,
+        "description": "Adresse lieu de retrait (max 25).",
+        "example": "3 avenue du général de Gaulle"
+      }
+    ],
+    "enums": {
+      "user.status": [
+        "Commande confirmé",
+        "Préparation commande",
+        "Acheminement",
+        "Prise en charge",
+        "Livraison en Cours",
+        "Commande livrée"
+      ]
+    }
+  },
+  "notifications": [
+    {
+      "id": "n_1",
+      "trigger": "Post installation",
+      "timing": "Immédiat",
+      "messages": {
+        "fr": "Votre carte est prête ✅",
+        "en": "Your pass is ready ✅"
+      }
+    },
+    {
+      "id": "n_2",
+      "trigger": "StatusChanged: Acheminement",
+      "timing": "À la mise à jour",
+      "messages": {
+        "fr": "Votre colis est pris en charge ✅",
+        "en": "Your parcel is on its way ✅"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "id": "e_1",
+      "code": "ER0",
+      "category": "functional",
+      "scenario": "Identifiant inconnu",
+      "messages": {
+        "fr": "Nous n'avons pu trouver les informations nécessaires à la création de votre carte. (Err. 0)",
+        "en": "We could not find the necessary information to build your card. (Err. 0)"
+      },
+      "retry": "no",
+      "owner": "Brand"
+    },
+    {
+      "id": "e_2",
+      "code": "ER1",
+      "category": "functional",
+      "scenario": "Donnée obligatoire manquante / incomplète",
+      "messages": {
+        "fr": "Nous ne possédons pas toutes les informations nécessaires à la création de votre carte. (Err. 1)",
+        "en": "We do not have all the information required to create your pass. (Err. 1)"
+      },
+      "retry": "no",
+      "owner": "Source System"
+    },
+    {
+      "id": "e_3",
+      "code": "ER2",
+      "category": "external",
+      "scenario": "API indisponible / timeout",
+      "messages": {
+        "fr": "Ce service est momentanément indisponible. Merci de réessayer ultérieurement. (Err. 2)",
+        "en": "Sorry, we could not reach the services required to create your card. Please try again later. (Err. 2)"
+      },
+      "retry": "backoff",
+      "owner": "Source System"
+    },
+    {
+      "id": "e_4",
+      "code": "ER3",
+      "category": "external",
+      "scenario": "Erreur technique (API retourne un code erreur)",
+      "messages": {
+        "fr": "Nous n'avons pu traiter votre demande. (Err. 3)",
+        "en": "We could not process your request. (Err. 3)"
+      },
+      "retry": "backoff",
+      "owner": "Tech"
+    }
+  ],
+  "testing": {
+    "acceptanceCriteria": [
+      "Encartement OK iOS/Android",
+      "Landing desktop -> QR -> encartement OK",
+      "Opt-in remonté via transport choisi",
+      "Update status visible sur carte",
+      "Anonymisation: bascule void + purge données"
+    ],
+    "testCases": [
+      {
+        "id": "TC01",
+        "title": "Encartement identifiant valide",
+        "expected": "Carte créée et installable"
+      },
+      {
+        "id": "TC02",
+        "title": "Encartement sans identifiant",
+        "expected": "Erreur affichée (ER1)"
+      }
+    ]
+  },
+  "workshopLog": {
+    "decisions": [
+      {
+        "id": "D1",
+        "date": "2026-02-27",
+        "area": "Sécurité",
+        "decision": "Signature SHA256 côté serveur",
+        "owner": "Tech",
+        "status": "done"
+      }
+    ],
+    "questions": [
+      {
+        "id": "Q1",
+        "date": "2026-02-27",
+        "area": "Mapping",
+        "question": "Liste complète des champs & formats à confirmer",
+        "owner": "Métier",
+        "status": "open"
+      }
+    ],
+    "actions": [
+      {
+        "id": "A1",
+        "date": "2026-02-27",
+        "area": "Interfaces",
+        "action": "Fournir baseUrl API source + auth + endpoints",
+        "owner": "Source",
+        "dueDate": "",
+        "status": "open"
+      }
+    ]
+  },
+  "preview": {
+    "entrypointPreprod": "https://qlf-colissimo.captainwallet.com/fr_FR/loyalty?user%5Bidentifier%5D=123456789ABCD&channel=email&tag=newsletter&signature=%7B%7Bsignature%7D%7D",
+    "entrypointProd": "https://colissimo.captainwallet.com/fr_FR/loyalty?user%5Bidentifier%5D=123456789ABCD&channel=email&tag=newsletter&signature=%7B%7Bsignature%7D%7D"
+  }
+}

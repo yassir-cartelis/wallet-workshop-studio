@@ -1,0 +1,11 @@
+:root{
+  --bg-grid-size: 22px;
+  --bg-grid-dot: rgb(226 232 240);
+}
+.bg-grid{
+  background-size: var(--bg-grid-size) var(--bg-grid-size);
+  background-image: radial-gradient(circle, var(--bg-grid-dot) 1px, transparent 1px);
+}
+.code-scroll::-webkit-scrollbar { height: 6px; width: 8px; }
+.code-scroll::-webkit-scrollbar-thumb { background: rgb(51 65 85); border-radius: 999px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }

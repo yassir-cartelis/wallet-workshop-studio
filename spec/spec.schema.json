@@ -1,0 +1,651 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/wallet-workshop-spec.schema.json",
+  "title": "Wallet Workshop Spec",
+  "type": "object",
+  "required": [
+    "meta",
+    "project",
+    "walletPlatform",
+    "entrypoint",
+    "security",
+    "flows",
+    "dataContract"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "generatedAt",
+        "tool",
+        "version"
+      ],
+      "properties": {
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "name",
+        "brand",
+        "timezone",
+        "platforms"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "brand": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "fr"
+          ]
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android"
+            ]
+          },
+          "minItems": 1
+        },
+        "workshop": {
+          "type": "object",
+          "properties": {
+            "sessions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": "string"
+                  },
+                  "goal": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "participants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "team": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "walletPlatform": {
+      "type": "object",
+      "required": [
+        "vendor",
+        "baseDomain",
+        "accountId",
+        "projectId",
+        "campaigns"
+      ],
+      "properties": {
+        "vendor": {
+          "type": "string"
+        },
+        "baseDomain": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "campaigns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "main",
+                  "void",
+                  "adhoc"
+                ]
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "entrypoint": {
+      "type": "object",
+      "required": [
+        "params",
+        "examples"
+      ],
+      "properties": {
+        "params": {
+          "type": "object",
+          "required": [
+            "identifier",
+            "channel",
+            "tag"
+          ],
+          "properties": {
+            "identifier": {
+              "type": "string"
+            },
+            "channel": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "signature": {
+              "type": "string",
+              "default": "signature"
+            },
+            "aesData": {
+              "type": "string",
+              "default": "data"
+            }
+          }
+        },
+        "examples": {
+          "type": "object",
+          "required": [
+            "identifier",
+            "channel"
+          ],
+          "properties": {
+            "identifier": {
+              "type": "string"
+            },
+            "channel": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": [
+        "mode",
+        "urlEncodingRequired"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "sha256",
+            "aes256cbc"
+          ]
+        },
+        "urlEncodingRequired": {
+          "type": "boolean"
+        },
+        "sha256": {
+          "type": "object",
+          "properties": {
+            "salt": {
+              "type": "string"
+            },
+            "computeWhere": {
+              "type": "string",
+              "enum": [
+                "server",
+                "client",
+                "db"
+              ],
+              "default": "server"
+            },
+            "signatureParam": {
+              "type": "string",
+              "default": "signature"
+            }
+          }
+        },
+        "aes256cbc": {
+          "type": "object",
+          "properties": {
+            "keyB64": {
+              "type": "string"
+            },
+            "ivB64": {
+              "type": "string"
+            },
+            "payloadTemplate": {
+              "type": "string"
+            },
+            "padding": {
+              "type": "string",
+              "enum": [
+                "pkcs7",
+                "zero"
+              ],
+              "default": "pkcs7"
+            },
+            "dataParam": {
+              "type": "string",
+              "default": "data"
+            },
+            "computeWhere": {
+              "type": "string",
+              "enum": [
+                "server",
+                "client"
+              ],
+              "default": "server"
+            }
+          }
+        }
+      }
+    },
+    "flows": {
+      "type": "object",
+      "required": [
+        "update",
+        "optin",
+        "anonymize",
+        "merge"
+      ],
+      "properties": {
+        "update": {
+          "type": "object",
+          "properties": {
+            "transport": {
+              "type": "string",
+              "enum": [
+                "api",
+                "sftp"
+              ],
+              "default": "api"
+            },
+            "cwUpdateMode": {
+              "type": "string",
+              "enum": [
+                "standard",
+                "webhook"
+              ],
+              "default": "standard"
+            }
+          }
+        },
+        "optin": {
+          "type": "object",
+          "properties": {
+            "transport": {
+              "type": "string",
+              "enum": [
+                "api",
+                "sftp"
+              ],
+              "default": "api"
+            }
+          }
+        },
+        "anonymize": {
+          "type": "object",
+          "properties": {
+            "transport": {
+              "type": "string",
+              "enum": [
+                "api",
+                "sftp"
+              ],
+              "default": "api"
+            },
+            "voidCampaignId": {
+              "type": "string"
+            }
+          }
+        },
+        "merge": {
+          "type": "object",
+          "properties": {
+            "transport": {
+              "type": "string",
+              "enum": [
+                "api",
+                "sftp"
+              ],
+              "default": "api"
+            }
+          }
+        }
+      }
+    },
+    "interfaces": {
+      "type": "object",
+      "properties": {
+        "captainWalletApi": {
+          "type": "object",
+          "properties": {
+            "env": {
+              "type": "object",
+              "properties": {
+                "dev": {
+                  "type": "object",
+                  "properties": {
+                    "oauthTokenUrl": {
+                      "type": "string"
+                    },
+                    "apiBaseUrl": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "prod": {
+                  "type": "object",
+                  "properties": {
+                    "oauthTokenUrl": {
+                      "type": "string"
+                    },
+                    "apiBaseUrl": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "oauth": {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "type": "string"
+                },
+                "tokenTtlSeconds": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cacheRecommended": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "sourceSystem": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "apiBaseUrl": {
+              "type": "string"
+            },
+            "timeoutSlaMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "endpoints": {
+              "type": "object",
+              "properties": {
+                "getCustomer": {
+                  "type": "string"
+                },
+                "optin": {
+                  "type": "string"
+                },
+                "docs": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "sftp": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "toWalletDir": {
+              "type": "string"
+            },
+            "fromWalletDir": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "dataContract": {
+      "type": "object",
+      "required": [
+        "fields"
+      ],
+      "properties": {
+        "timezonePolicy": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "walletField",
+              "type"
+            ],
+            "properties": {
+              "sourceField": {
+                "type": "string"
+              },
+              "walletField": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "date",
+                  "object",
+                  "array"
+                ]
+              },
+              "format": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string"
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "notifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "trigger",
+          "messages"
+        ],
+        "properties": {
+          "trigger": {
+            "type": "string"
+          },
+          "timing": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "object",
+            "properties": {
+              "fr": {
+                "type": "string",
+                "maxLength": 150
+              },
+              "en": {
+                "type": "string",
+                "maxLength": 150
+              }
+            }
+          }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "category",
+          "messages"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "functional",
+              "technical",
+              "security",
+              "external"
+            ]
+          },
+          "scenario": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "object",
+            "properties": {
+              "fr": {
+                "type": "string"
+              },
+              "en": {
+                "type": "string"
+              }
+            }
+          },
+          "retry": {
+            "type": "string",
+            "enum": [
+              "no",
+              "yes",
+              "backoff"
+            ]
+          },
+          "owner": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "workshopLog": {
+      "type": "object",
+      "properties": {
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

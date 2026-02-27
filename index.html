@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Wallet Workshop Studio</title>
+
+  <!-- Vue 3 (CDN) -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- JSZip + LZ-String (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+
+<body class="bg-slate-100 bg-grid min-h-screen text-slate-800">
+  <div id="app" class="max-w-[1750px] mx-auto p-6">
+    <!-- Header -->
+    <header class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6">
+      <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="bg-blue-600 text-white w-11 h-11 rounded-xl flex items-center justify-center">
+            <span class="text-xl">🪪</span>
+          </div>
+          <div>
+            <h1 class="text-xl font-extrabold leading-tight">{{ uiTitle }}</h1>
+            <p class="text-xs text-slate-500 uppercase tracking-widest font-semibold">
+              Atelier métiers &amp; tech · génération de specs
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center">
+          <div class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="font-bold">Complétude</span>
+              <span class="font-extrabold" :class="completeness >= 85 ? 'text-green-700' : completeness >= 60 ? 'text-amber-700' : 'text-red-700'">
+                {{ completeness }}%
+              </span>
+            </div>
+            <div class="mt-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+              <div class="h-full bg-blue-600" :style="{ width: completeness + '%' }"></div>
+            </div>
+          </div>
+
+          <div class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="font-bold">Mode</span>
+              <button @click="ui.viewMode = (ui.viewMode==='atelier' ? 'tech' : 'atelier')"
+                class="px-2 py-1 rounded-lg border border-slate-200 bg-white font-extrabold text-[11px] hover:bg-slate-50">
+                {{ ui.viewMode==='atelier' ? 'Atelier (simple)' : 'Tech (complet)' }}
+              </button>
+            </div>
+            <div class="mt-1 text-[11px] text-slate-500">
+              {{ ui.viewMode==='atelier' ? 'Champs essentiels mis en avant.' : 'Champs avancés visibles.' }}
+            </div>
+          </div>
+
+          <button @click="copyShareLink"
+            class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-extrabold hover:bg-emerald-700 transition">
+            Partager (lien)
+          </button>
+
+          <button @click="openImportModal"
+            class="border border-slate-200 bg-white px-4 py-2 rounded-xl text-sm font-extrabold hover:bg-slate-50 transition">
+            Importer
+          </button>
+
+          <button @click="exportJson"
+            class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-extrabold hover:bg-slate-800 transition">
+            Export JSON
+          </button>
+
+          <button @click="exportHtml"
+            class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-extrabold hover:bg-blue-700 transition">
+            Export HTML (print)
+          </button>
+
+          <button @click="exportDevPackZip"
+            class="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-extrabold hover:bg-purple-700 transition">
+            Dev Pack (.zip)
+          </button>
+
+          <button @click="resetAll"
+            class="border border-slate-200 bg-white px-4 py-2 rounded-xl text-sm font-extrabold hover:bg-slate-50 transition">
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Warnings / missing fields -->
+      <div v-if="topWarnings.length" class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <div v-for="w in topWarnings" :key="w" class="text-xs p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-900">
+          <span class="font-extrabold">⚠</span> {{ w }}
+        </div>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-12 gap-6">
+      <!-- Left panel -->
+      <aside class="col-span-12 lg:col-span-4 space-y-6">
+        <!-- Stepper -->
+        <nav class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between">
+            <template v-for="s in steps" :key="s.id">
+              <button
+                @click="gotoStep(s.id)"
+                :class="[
+                  'w-9 h-9 rounded-full flex items-center justify-center font-extrabold text-xs transition border',
+                  currentStep === s.id ? 'bg-blue-600 text-white border-blue-600' : isStepValid(s.id) ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+                ]"
+                :title="s.label"
+              >
+                {{ s.id }}
+              </button>
+              <div v-if="s.id < steps.length" class="flex-1 h-px bg-slate-200 mx-2"></div>
+            </template>
+          </div>
+          <div class="mt-4 flex items-center justify-between">
+            <div>
+              <div class="text-xs uppercase tracking-widest text-slate-400 font-bold">Étape</div>
+              <div class="font-extrabold">{{ stepLabel }}</div>
+              <div class="text-[11px] text-slate-500 mt-1">{{ stepHint }}</div>
+            </div>
+            <div class="text-xs text-slate-500">
+              <span class="font-semibold">{{ currentStep }}</span>/<span class="font-semibold">{{ steps.length }}</span>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Step content -->
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <!-- Step 1: Contexte -->
+          <div v-if="currentStep === 1" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">1) Contexte</h2>
+                <p class="text-xs text-slate-500 mt-1">Nom, objectifs, OS, langues, timezone, participants.</p>
+              </div>
+              <span class="text-2xl">🧭</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">Nom projet <span class="text-red-600">*</span></label>
+                <input v-model.trim="project.name" type="text"
+                  class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Ex: Carte suivi livraison" />
+              </div>
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">Brand / Entité <span class="text-red-600">*</span></label>
+                <input v-model.trim="project.brand" type="text"
+                  class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Ex: Colissimo" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-extrabold text-slate-500 uppercase">Objectif (1–2 phrases)</label>
+              <textarea v-model.trim="project.description" rows="2"
+                class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Pourquoi ce wallet existe ? Quels bénéfices ?" ></textarea>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">OS cibles <span class="text-red-600">*</span></label>
+                <div class="mt-1 flex flex-wrap gap-2">
+                  <label class="px-3 py-2 rounded-xl border text-sm cursor-pointer select-none"
+                    :class="project.platforms.includes('ios') ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'">
+                    <input type="checkbox" class="mr-2" value="ios" v-model="project.platforms"> iOS (Apple Wallet)
+                  </label>
+                  <label class="px-3 py-2 rounded-xl border text-sm cursor-pointer select-none"
+                    :class="project.platforms.includes('android') ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'">
+                    <input type="checkbox" class="mr-2" value="android" v-model="project.platforms"> Android (Google Wallet)
+                  </label>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">Le doc de référence prévoit iOS + Android via wallets natifs.</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">Fuseau horaire <span class="text-red-600">*</span></label>
+                <select v-model="project.timezone"
+                  class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                  <option value="UTC">UTC (par défaut)</option>
+                  <option value="Europe/Paris">Europe/Paris</option>
+                  <option value="Europe/Berlin">Europe/Berlin</option>
+                  <option value="America/New_York">America/New_York</option>
+                </select>
+                <p class="text-[11px] text-slate-500 mt-1">
+                  Important: si vous n'êtes pas en UTC, il faut l'appliquer partout (opt-in, dates, offers…).
+                </p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">Langues</label>
+                <div class="mt-1 flex flex-wrap gap-2">
+                  <label class="px-3 py-2 rounded-xl border text-sm cursor-pointer select-none"
+                    :class="project.languages.includes('fr') ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'">
+                    <input type="checkbox" class="mr-2" value="fr" v-model="project.languages"> FR
+                  </label>
+                  <label class="px-3 py-2 rounded-xl border text-sm cursor-pointer select-none"
+                    :class="project.languages.includes('en') ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'">
+                    <input type="checkbox" class="mr-2" value="en" v-model="project.languages"> EN
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">Sessions atelier</label>
+                <div class="mt-1 flex gap-2">
+                  <button @click="addSession" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800">+ Ajouter</button>
+                  <button v-if="project.workshop.sessions.length" @click="project.workshop.sessions=[]" class="px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-extrabold hover:bg-slate-50">Vider</button>
+                </div>
+                <div v-if="project.workshop.sessions.length" class="mt-2 space-y-2">
+                  <div v-for="(s, i) in project.workshop.sessions" :key="s.id" class="p-3 rounded-xl border bg-slate-50">
+                    <div class="flex items-center justify-between">
+                      <div class="text-xs font-extrabold text-slate-500 uppercase">Session #{{ i+1 }}</div>
+                      <button @click="project.workshop.sessions.splice(i,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                      <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Date</label>
+                        <input v-model.trim="s.date" type="date" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                      </div>
+                      <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Objectif</label>
+                        <input v-model.trim="s.goal" type="text" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Cadrage / Mapping / Recette..."/>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">Participants</div>
+                <button @click="addParticipant" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800">+ Ajouter</button>
+              </div>
+              <div v-if="project.workshop.participants.length===0" class="text-xs text-slate-500 italic mt-2">Ajoute au moins les owners métiers &amp; tech.</div>
+              <div v-else class="mt-3 space-y-2">
+                <div v-for="(p, i) in project.workshop.participants" :key="p.id" class="p-3 rounded-xl bg-white border">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs font-extrabold text-slate-500 uppercase">#{{ i+1 }}</div>
+                    <button @click="project.workshop.participants.splice(i,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                    <input v-model.trim="p.name" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nom"/>
+                    <input v-model.trim="p.role" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Rôle (Ops / Tech / Produit)"/>
+                    <input v-model.trim="p.team" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Team"/>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="nextStep"
+                class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-extrabold hover:bg-blue-700 transition">
+                Continuer
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: Parcours -->
+          <div v-if="currentStep === 2" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">2) Parcours &amp; CTA</h2>
+                <p class="text-xs text-slate-500 mt-1">Canaux, contextes, desktop → landing + QR, wording.</p>
+              </div>
+              <span class="text-2xl">🧩</span>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Contextes</div>
+              <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" v-model="journey.contexts.authenticated"/>
+                  Authentifié (email / sms / web)
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" v-model="journey.contexts.unauthenticated"/>
+                  Non-authentifié (PDV / RS / print / QR)
+                </label>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">
+                Le doc de référence prévoit ces deux contextes (authentifié et non-authentifié) et des CTA sur plusieurs points de contact.
+              </p>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">Touchpoints / CTA</div>
+                <button @click="addTouchpoint" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800">+ Ajouter</button>
+              </div>
+
+              <div v-if="journey.touchpoints.length===0" class="text-xs text-slate-500 italic">
+                Ajoute au moins 1 point de contact (email, web, QR…).
+              </div>
+
+              <div v-else class="space-y-2 max-h-[360px] overflow-auto pr-2 code-scroll">
+                <div v-for="(t, i) in journey.touchpoints" :key="t.id" class="p-3 rounded-xl border bg-white">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs font-extrabold text-slate-500 uppercase">CTA #{{ i+1 }}</div>
+                    <button @click="journey.touchpoints.splice(i,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Canal</label>
+                      <select v-model="t.channel" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="email">email</option>
+                        <option value="sms">sms</option>
+                        <option value="web">web</option>
+                        <option value="qr">qr</option>
+                        <option value="other">other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Contexte</label>
+                      <select v-model="t.context" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="authenticated" :disabled="!journey.contexts.authenticated">authenticated</option>
+                        <option value="unauthenticated" :disabled="!journey.contexts.unauthenticated">unauthenticated</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">CTA label FR</label>
+                      <input v-model.trim="t.ctaLabelFr" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ajouter au Wallet"/>
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">CTA label EN</label>
+                      <input v-model.trim="t.ctaLabelEn" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Add to Wallet"/>
+                    </div>
+                  </div>
+
+                  <div v-if="ui.viewMode==='tech'" class="mt-2">
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Notes (implémentation)</label>
+                    <input v-model.trim="t.notes" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Où placer le CTA ? contraintes routing mail ?..."/>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-2">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Desktop</div>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" v-model="journey.desktop.useLandingWithQr"/>
+                Si clic desktop : afficher une landing avec QR code pour installation mobile
+              </label>
+              <div v-if="journey.desktop.useLandingWithQr" class="mt-2">
+                <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Notes landing</label>
+                <textarea v-model.trim="journey.desktop.notes" rows="2" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="prevStep" class="flex-1 border border-slate-200 py-3 rounded-xl font-extrabold hover:bg-slate-50 transition">Retour</button>
+              <button @click="nextStep" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-extrabold hover:bg-blue-700 transition">Continuer</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Entrypoints -->
+          <div v-if="currentStep === 3" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">3) Entrypoints</h2>
+                <p class="text-xs text-slate-500 mt-1">accountId, projectId, campagnes, paramètres URL, tracking.</p>
+              </div>
+              <span class="text-2xl">🔗</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">Vendor</label>
+                <input v-model.trim="walletPlatform.vendor" type="text"
+                  class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"/>
+              </div>
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">Domaine (base) <span class="text-red-600">*</span></label>
+                <input v-model.trim="walletPlatform.baseDomain" type="text"
+                  class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="captainwallet.com"/>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">accountId (subdomain) <span class="text-red-600">*</span></label>
+                <input v-model.trim="walletPlatform.accountId" type="text"
+                  class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="ex: colissimo"/>
+                <p class="text-[11px] text-slate-500 mt-1">Ex preprod: <span class="mono">https://qlf-{{accountId}}.captainwallet.com/…</span></p>
+              </div>
+              <div>
+                <label class="block text-xs font-extrabold text-slate-500 uppercase">projectId <span class="text-red-600">*</span></label>
+                <input v-model.trim="walletPlatform.projectId" type="text"
+                  class="mt-1 w-full p-3 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="ex: fr_FR"/>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">Campagnes</div>
+                <button @click="addCampaign" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800">+ Ajouter</button>
+              </div>
+
+              <div class="text-[11px] text-slate-500">
+                Conseil : prévoir au minimum une campagne <span class="font-semibold">main</span> + une campagne <span class="font-semibold">void</span> (anonymisation).
+              </div>
+
+              <div class="space-y-2 max-h-[320px] overflow-auto pr-2 code-scroll">
+                <div v-for="(c, i) in walletPlatform.campaigns" :key="c.id" class="p-3 rounded-xl border bg-white">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs font-extrabold text-slate-500 uppercase">Campagne #{{ i+1 }}</div>
+                    <button @click="walletPlatform.campaigns.splice(i,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">campaignId</label>
+                      <input v-model.trim="c.id" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="loyalty"/>
+                    </div>
+                    <div class="md:col-span-2">
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Nom</label>
+                      <input v-model.trim="c.name" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Suivi livraison multi-statuts"/>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Type</label>
+                      <select v-model="c.type" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="main">main</option>
+                        <option value="void">void</option>
+                        <option value="adhoc">adhoc</option>
+                      </select>
+                    </div>
+                    <div v-if="ui.viewMode==='tech'">
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Description</label>
+                      <input v-model.trim="c.description" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Optionnel"/>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Paramètres URL</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Paramètre identifiant <span class="text-red-600">*</span></label>
+                  <input v-model.trim="entrypoint.params.identifier" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="user[identifier]"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Exemple identifiant <span class="text-red-600">*</span></label>
+                  <input v-model.trim="entrypoint.examples.identifier" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="123456789ABCD"/>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Paramètre channel</label>
+                  <input v-model.trim="entrypoint.params.channel" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="channel"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Exemple channel</label>
+                  <select v-model="entrypoint.examples.channel" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="email">email</option>
+                    <option value="sms">sms</option>
+                    <option value="web">web</option>
+                    <option value="qr">qr</option>
+                    <option value="other">other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Paramètre tag (tracking)</label>
+                  <input v-model.trim="entrypoint.params.tag" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="tag"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Exemple tag</label>
+                  <input v-model.trim="entrypoint.examples.tag" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="newsletter"/>
+                </div>
+              </div>
+
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" v-model="security.urlEncodingRequired"/>
+                URL-encode obligatoire (recommandé) <span class="text-slate-500 text-[11px]">(paramètres)</span>
+              </label>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="prevStep" class="flex-1 border border-slate-200 py-3 rounded-xl font-extrabold hover:bg-slate-50 transition">Retour</button>
+              <button @click="nextStep" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-extrabold hover:bg-blue-700 transition">Continuer</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Sécurité -->
+          <div v-if="currentStep === 4" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">4) Sécurité URL</h2>
+                <p class="text-xs text-slate-500 mt-1">Aucune / SHA256 signature / AES-256-CBC.</p>
+              </div>
+              <span class="text-2xl">🛡️</span>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-extrabold text-slate-500 uppercase">Mode <span class="text-red-600">*</span></label>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <button @click="security.mode='none'"
+                  :class="security.mode==='none' ? 'bg-blue-600 text-white' : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'"
+                  class="px-3 py-3 rounded-xl font-extrabold text-sm transition">
+                  Aucun
+                </button>
+                <button @click="security.mode='sha256'"
+                  :class="security.mode==='sha256' ? 'bg-blue-600 text-white' : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'"
+                  class="px-3 py-3 rounded-xl font-extrabold text-sm transition">
+                  SHA256 (signature)
+                </button>
+                <button @click="security.mode='aes256cbc'"
+                  :class="security.mode==='aes256cbc' ? 'bg-blue-600 text-white' : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'"
+                  class="px-3 py-3 rounded-xl font-extrabold text-sm transition">
+                  AES-256-CBC (data)
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500">
+                Point d'attention : unifier la sécurisation sur tous les outils qui génèrent l'URL (router mail, etc).
+              </p>
+            </div>
+
+            <div v-if="security.mode==='sha256'" class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">Signature SHA256</div>
+                <span class="text-[11px] text-slate-500">signature = sha256(identifier + SALT)</span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Nom paramètre signature</label>
+                  <input v-model.trim="security.sha256.signatureParam" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="signature"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Où calculer ?</label>
+                  <select v-model="security.sha256.computeWhere" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="server">serveur (recommandé)</option>
+                    <option value="db">base de données / ETL (recommandé)</option>
+                    <option value="client">navigateur (à éviter)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div v-if="ui.viewMode==='tech'" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">SALT (seulement pour preview)</label>
+                  <input v-model.trim="security.sha256.salt" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="SALT (ne pas exposer côté client)" />
+                </div>
+                <div class="flex items-center gap-2 mt-6">
+                  <input type="checkbox" v-model="security.sha256.previewInBrowser" />
+                  <span class="text-sm font-semibold">Calculer en navigateur (preview)</span>
+                </div>
+              </div>
+
+              <div v-if="security.sha256.previewInBrowser && !security.sha256.salt.trim()" class="text-xs text-amber-900 bg-amber-50 border border-amber-200 p-3 rounded-xl">
+                ⚠ Pour le preview navigateur, il faut renseigner un SALT.
+              </div>
+            </div>
+
+            <div v-if="security.mode==='aes256cbc'" class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">AES-256-CBC</div>
+                <span class="text-[11px] text-slate-500">data = base64(aes256cbc(payload))</span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Nom paramètre data</label>
+                  <input v-model.trim="security.aes256cbc.dataParam" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="data"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Padding</label>
+                  <select v-model="security.aes256cbc.padding" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="pkcs7">PKCS#7 (courant)</option>
+                    <option value="zero">Zero padding (si OpenSSL ZERO_PADDING)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Template payload (chiffré)</label>
+                <input v-model.trim="security.aes256cbc.payloadTemplate" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="identifier={{identifier}}&channel={{channel}}&tag={{tag}}"/>
+                <p class="text-[11px] text-slate-500 mt-1">
+                  Placeholders: <span class="mono">{{identifier}}</span>, <span class="mono">{{channel}}</span>, <span class="mono">{{tag}}</span>
+                </p>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Où calculer ?</label>
+                  <select v-model="security.aes256cbc.computeWhere" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="server">serveur (recommandé)</option>
+                    <option value="client">navigateur (preview seulement)</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2 mt-6">
+                  <input type="checkbox" v-model="security.aes256cbc.previewInBrowser" />
+                  <span class="text-sm font-semibold">Calculer en navigateur (preview)</span>
+                </div>
+              </div>
+
+              <div v-if="security.aes256cbc.previewInBrowser" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Key (base64) – 32 bytes</label>
+                  <input v-model.trim="security.aes256cbc.keyB64" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="32 bytes base64"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">IV (base64) – 16 bytes</label>
+                  <input v-model.trim="security.aes256cbc.ivB64" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="16 bytes base64"/>
+                </div>
+              </div>
+
+              <div v-if="security.aes256cbc.previewInBrowser && (!security.aes256cbc.keyB64.trim() || !security.aes256cbc.ivB64.trim())" class="text-xs text-amber-900 bg-amber-50 border border-amber-200 p-3 rounded-xl">
+                ⚠ Pour le preview navigateur, il faut renseigner keyB64 + ivB64.
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="prevStep" class="flex-1 border border-slate-200 py-3 rounded-xl font-extrabold hover:bg-slate-50 transition">Retour</button>
+              <button @click="nextStep" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-extrabold hover:bg-blue-700 transition">Continuer</button>
+            </div>
+          </div>
+
+          <!-- Step 5: Data contract -->
+          <div v-if="currentStep === 5" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">5) Data contract (mapping)</h2>
+                <p class="text-xs text-slate-500 mt-1">Champs, types, formats, contraintes, enum.</p>
+              </div>
+              <span class="text-2xl">🧱</span>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-2">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Politique timezone</div>
+              <textarea v-model.trim="dataContract.timezonePolicy" rows="2"
+                class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-slate-500">
+                <span class="font-extrabold">{{ dataContract.fields.length }}</span> champ(s)
+                <span v-if="mappingIssues.length" class="ml-2 text-red-600 font-semibold">
+                  ({{ mappingIssues.length }} point(s) à corriger)
+                </span>
+              </div>
+              <button @click="addField"
+                class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800 transition">
+                + Ajouter
+              </button>
+            </div>
+
+            <div class="space-y-3 max-h-[420px] overflow-auto pr-2 code-scroll">
+              <div v-for="(f, idx) in dataContract.fields" :key="f.id" class="p-3 rounded-2xl border bg-slate-50">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs font-extrabold uppercase text-slate-500">Champ #{{ idx+1 }}</div>
+                  <button @click="dataContract.fields.splice(idx, 1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Source field</label>
+                    <input v-model.trim="f.sourceField" type="text"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="ex: order.status / TBD" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Wallet field <span class="text-red-600">*</span></label>
+                    <input v-model.trim="f.walletField" type="text"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="ex: user.status" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                  <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Type <span class="text-red-600">*</span></label>
+                    <select v-model="f.type"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="string">string</option>
+                      <option value="number">number</option>
+                      <option value="boolean">boolean</option>
+                      <option value="date">date</option>
+                      <option value="object">object</option>
+                      <option value="array">array</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Format</label>
+                    <input v-model.trim="f.format" type="text"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="ex: ISO-8601 / DD/MM/YYYY" />
+                  </div>
+                  <div class="flex items-center gap-2 mt-6">
+                    <input type="checkbox" v-model="f.required" />
+                    <span class="text-sm font-semibold">Requis</span>
+                  </div>
+                </div>
+
+                <div class="mt-2">
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Description</label>
+                  <input v-model.trim="f.description" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="à quoi sert ce champ ?" />
+                </div>
+
+                <div v-if="ui.viewMode==='tech'" class="mt-2">
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Exemple</label>
+                  <input v-model.trim="f.example" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="ex: Acheminement / 2026-02-10T..." />
+                </div>
+
+                <div v-if="fieldIssues(f).length" class="mt-2 text-xs text-red-700">
+                  <div v-for="issue in fieldIssues(f)" :key="issue">• {{ issue }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-2">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Enumérations (optionnel)</div>
+              <div class="text-[11px] text-slate-500">Ex: liste des statuts `user.status`.</div>
+              <textarea v-model.trim="dataContract.enumsJson" rows="4"
+                class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none mono"
+                placeholder='{"user.status":["Commande confirmé","..."]}'></textarea>
+              <div v-if="enumJsonError" class="text-xs text-red-700">• {{ enumJsonError }}</div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="prevStep" class="flex-1 border border-slate-200 py-3 rounded-xl font-extrabold hover:bg-slate-50 transition">Retour</button>
+              <button @click="nextStep" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-extrabold hover:bg-blue-700 transition">Continuer</button>
+            </div>
+          </div>
+
+          <!-- Step 6: Flux & Interfaces -->
+          <div v-if="currentStep === 6" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">6) Flux &amp; Interfaces</h2>
+                <p class="text-xs text-slate-500 mt-1">API / SFTP, endpoints, auth, timeouts.</p>
+              </div>
+              <span class="text-2xl">🧬</span>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">Transports</div>
+                <div class="text-[11px] text-slate-500">Chaque flux peut être API ou SFTP.</div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div class="p-3 rounded-xl bg-white border">
+                  <div class="text-[11px] text-slate-500 uppercase font-extrabold">Update cartes (Source → Wallet)</div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <select v-model="flows.update.transport" class="w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="api">API</option>
+                      <option value="sftp">SFTP / CSV</option>
+                    </select>
+                  </div>
+                  <div class="mt-2" v-if="flows.update.transport==='api'">
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Mode endpoint CW</label>
+                    <select v-model="flows.update.cwUpdateMode" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="standard">Standard (PUT pass-owners)</option>
+                      <option value="webhook">Webhook (POST hooks/update)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-white border">
+                  <div class="text-[11px] text-slate-500 uppercase font-extrabold">Opt-in (Wallet → Source)</div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <select v-model="flows.optin.transport" class="w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="api">API (temps réel)</option>
+                      <option value="sftp">SFTP / CSV</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-white border">
+                  <div class="text-[11px] text-slate-500 uppercase font-extrabold">Anonymisation (Source → Wallet)</div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <select v-model="flows.anonymize.transport" class="w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="api">API</option>
+                      <option value="sftp">SFTP / CSV</option>
+                    </select>
+                  </div>
+                  <div class="mt-2">
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Campaign void</label>
+                    <input v-model.trim="flows.anonymize.voidCampaignId" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="void"/>
+                    <p class="text-[11px] text-slate-500 mt-1">Le doc prévoit une campagne "void" + anonymisation différée.</p>
+                  </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-white border">
+                  <div class="text-[11px] text-slate-500 uppercase font-extrabold">Fusion (Source → Wallet)</div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <select v-model="flows.merge.transport" class="w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="api">API</option>
+                      <option value="sftp">SFTP / CSV</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Interfaces — Captain Wallet (API)</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">OAuth token URL (DEV)</label>
+                  <input v-model.trim="interfaces.captainWalletApi.env.dev.oauthTokenUrl" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">OAuth token URL (PROD)</label>
+                  <input v-model.trim="interfaces.captainWalletApi.env.prod.oauthTokenUrl" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">API base URL (DEV)</label>
+                  <input v-model.trim="interfaces.captainWalletApi.env.dev.apiBaseUrl" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">API base URL (PROD)</label>
+                  <input v-model.trim="interfaces.captainWalletApi.env.prod.apiBaseUrl" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Scope</label>
+                  <input v-model.trim="interfaces.captainWalletApi.oauth.scope" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="pass-owner webhooks"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">TTL token (s)</label>
+                  <input v-model.number="interfaces.captainWalletApi.oauth.tokenTtlSeconds" type="number" min="0" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+                <div class="flex items-center gap-2 mt-6">
+                  <input type="checkbox" v-model="interfaces.captainWalletApi.oauth.cacheRecommended"/>
+                  <span class="text-sm font-semibold">Cache token</span>
+                </div>
+              </div>
+
+              <div class="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 p-3 rounded-xl">
+                ⚠ Important: prévoir un timeout / SLA strict côté source. Le doc mentionne un arrêt des requêtes après ~2s en production.
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Interface — Système source</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Nom système source <span class="text-red-600">*</span></label>
+                  <input v-model.trim="interfaces.sourceSystem.name" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="API Colissimo / OMS / CRM..."/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Base URL API</label>
+                  <input v-model.trim="interfaces.sourceSystem.apiBaseUrl" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="TBD"/>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">SLA / timeout (ms)</label>
+                  <input v-model.number="interfaces.sourceSystem.timeoutSlaMs" type="number" min="0" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                  <p class="text-[11px] text-slate-500 mt-1">Conseil : viser &lt;= 2000ms si CW coupe après ~2s.</p>
+                </div>
+                <div v-if="ui.viewMode==='tech'">
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Auth (note)</label>
+                  <input v-model.trim="interfaces.sourceSystem.authNote" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="OAuth2 / API key / mTLS..."/>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Endpoints Source (annexe)</div>
+              <p class="text-xs text-slate-600">
+                À compléter avec les endpoints exposés par le système source (GetCustomer pour l’encartement, Opt-in pour la remontée d’installation, docs techniques).
+              </p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">GetCustomer (URL ou path)</label>
+                  <input v-model.trim="interfaces.sourceSystem.endpoints.getCustomer" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="ex: /wallet/getCustomer ou https://api.source.com/wallet/getCustomer" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Opt-in (URL ou path)</label>
+                  <input v-model.trim="interfaces.sourceSystem.endpoints.optin" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="ex: /wallet/optin" />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Docs / Swagger (optionnel)</label>
+                  <input v-model.trim="interfaces.sourceSystem.endpoints.docs" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Lien interne / Confluence / swagger url" />
+                </div>
+              </div>
+            </div>
+
+            <div v-if="flowsAnySftp" class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="text-xs font-extrabold uppercase text-slate-500">SFTP</div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Host</label>
+                  <input v-model.trim="interfaces.sftp.host" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Port</label>
+                  <input v-model.number="interfaces.sftp.port" type="number" min="1" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">ToWallet directory</label>
+                  <input v-model.trim="interfaces.sftp.toWalletDir" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">FromWallet directory</label>
+                  <input v-model.trim="interfaces.sftp.fromWalletDir" class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+              </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Username (optionnel)</label>
+                  <input v-model.trim="interfaces.sftp.username" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Fourni par CW" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Password (optionnel)</label>
+                  <input v-model.trim="interfaces.sftp.password" type="password"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Fourni par CW (éviter si partage public)" />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Notes / rotation (optionnel)</label>
+                  <input v-model.trim="interfaces.sftp.notes" type="text"
+                    class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Ex: rotation mensuelle, canal sécurisé, etc." />
+                </div>
+
+              <div class="text-[11px] text-slate-500">Astuce : documenter le format CSV + la fréquence + l'heure (timezone).</div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="prevStep" class="flex-1 border border-slate-200 py-3 rounded-xl font-extrabold hover:bg-slate-50 transition">Retour</button>
+              <button @click="nextStep" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-extrabold hover:bg-blue-700 transition">Continuer</button>
+            </div>
+          </div>
+
+          <!-- Step 7: Notifs -->
+          <div v-if="currentStep === 7" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">7) Notifications</h2>
+                <p class="text-xs text-slate-500 mt-1">Triggers, messages (150 chars), pas de lien.</p>
+              </div>
+              <span class="text-2xl">🔔</span>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-slate-500">
+                <span class="font-extrabold">{{ notifications.length }}</span> notification(s)
+              </div>
+              <button @click="addNotification"
+                class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800 transition">
+                + Ajouter
+              </button>
+            </div>
+
+            <div class="space-y-3 max-h-[420px] overflow-auto pr-2 code-scroll">
+              <div v-for="(n, idx) in notifications" :key="n.id" class="p-3 rounded-2xl border bg-slate-50">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs font-extrabold uppercase text-slate-500">Notif #{{ idx+1 }}</div>
+                  <button @click="notifications.splice(idx, 1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Trigger <span class="text-red-600">*</span></label>
+                    <input v-model.trim="n.trigger" type="text"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="ex: Post installation / Status=..." />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Timing</label>
+                    <input v-model.trim="n.timing" type="text"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="ex: immédiat / +5min / daily 9am" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Message FR (≤150)</label>
+                    <textarea v-model="n.messages.fr" maxlength="150"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      rows="2"></textarea>
+                    <div class="mt-1 flex items-center justify-between text-[11px]">
+                      <span :class="(n.messages.fr||'').includes('http') ? 'text-red-700 font-semibold' : 'text-slate-500'">
+                        {{ (n.messages.fr||'').includes('http') ? 'Éviter les liens (http/https)' : 'OK' }}
+                      </span>
+                      <span :class="(n.messages.fr||'').length > 150 ? 'text-red-700' : 'text-slate-500'">{{ (n.messages.fr||'').length }}/150</span>
+                    </div>
+                  </div>
+
+                  <div v-if="project.languages.includes('en')">
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Message EN (≤150)</label>
+                    <textarea v-model="n.messages.en" maxlength="150"
+                      class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      rows="2"></textarea>
+                    <div class="mt-1 flex items-center justify-between text-[11px]">
+                      <span :class="(n.messages.en||'').includes('http') ? 'text-red-700 font-semibold' : 'text-slate-500'">
+                        {{ (n.messages.en||'').includes('http') ? 'Avoid links (http/https)' : 'OK' }}
+                      </span>
+                      <span :class="(n.messages.en||'').length > 150 ? 'text-red-700' : 'text-slate-500'">{{ (n.messages.en||'').length }}/150</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="prevStep" class="flex-1 border border-slate-200 py-3 rounded-xl font-extrabold hover:bg-slate-50 transition">Retour</button>
+              <button @click="nextStep" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-extrabold hover:bg-blue-700 transition">Continuer</button>
+            </div>
+          </div>
+
+          <!-- Step 8: Erreurs, tests, collaboration -->
+          <div v-if="currentStep === 8" class="space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-extrabold">8) Recette &amp; Collaboration</h2>
+                <p class="text-xs text-slate-500 mt-1">Erreurs, plan de test, décisions, questions, actions, export final.</p>
+              </div>
+              <span class="text-2xl">🤝</span>
+            </div>
+
+            <!-- Errors -->
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">Playbook erreurs</div>
+                <button @click="addError" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800 transition">+ Ajouter</button>
+              </div>
+
+              <div class="space-y-2 max-h-[240px] overflow-auto pr-2 code-scroll">
+                <div v-for="(e, idx) in errors" :key="e.id" class="p-3 rounded-xl border bg-white">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs font-extrabold text-slate-500 uppercase">{{ e.code || 'CODE' }}</div>
+                    <button @click="errors.splice(idx,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Code <span class="text-red-600">*</span></label>
+                      <input v-model.trim="e.code" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ER0"/>
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Catégorie</label>
+                      <select v-model="e.category" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="functional">functional</option>
+                        <option value="technical">technical</option>
+                        <option value="security">security</option>
+                        <option value="external">external</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="mt-2">
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Scénario</label>
+                    <input v-model.trim="e.scenario" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Identifiant inconnu"/>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Message FR</label>
+                      <textarea v-model.trim="e.messages.fr" rows="2" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+                    <div v-if="project.languages.includes('en')">
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Message EN</label>
+                      <textarea v-model.trim="e.messages.en" rows="2" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Retry</label>
+                      <select v-model="e.retry" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="no">no</option>
+                        <option value="yes">yes</option>
+                        <option value="backoff">backoff</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Owner</label>
+                      <input v-model.trim="e.owner" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Brand / Source / Wallet"/>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tests -->
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-extrabold uppercase text-slate-500">Plan de tests</div>
+                <button @click="addTestCase" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800 transition">+ Ajouter</button>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Critères d'acceptation (1 par ligne)</label>
+                <textarea v-model.trim="testing.acceptanceCriteriaText" rows="4"
+                  class="mt-1 w-full p-2.5 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Encartement OK iOS/Android..."></textarea>
+              </div>
+
+              <div class="space-y-2 max-h-[220px] overflow-auto pr-2 code-scroll">
+                <div v-for="(tc, idx) in testing.testCases" :key="tc.id" class="p-3 rounded-xl border bg-white">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs font-extrabold text-slate-500 uppercase">{{ tc.id }}</div>
+                    <button @click="testing.testCases.splice(idx,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                  </div>
+                  <div class="mt-2">
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Titre</label>
+                    <input v-model.trim="tc.title" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Encartement identifiant valide"/>
+                  </div>
+                  <div class="mt-2">
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase">Résultat attendu</label>
+                    <input v-model.trim="tc.expected" class="mt-1 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Carte créée et installable"/>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Workshop log -->
+            <div class="p-4 rounded-2xl border bg-slate-50 space-y-3">
+              <div class="text-xs font-extrabold uppercase text-slate-500">Journal atelier (décisions / questions / actions)</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <button @click="ui.logTab='decisions'" :class="ui.logTab==='decisions' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200'" class="py-2 rounded-xl text-sm font-extrabold">Décisions</button>
+                <button @click="ui.logTab='questions'" :class="ui.logTab==='questions' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200'" class="py-2 rounded-xl text-sm font-extrabold">Questions</button>
+                <button @click="ui.logTab='actions'" :class="ui.logTab==='actions' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200'" class="py-2 rounded-xl text-sm font-extrabold">Actions</button>
+              </div>
+
+              <div v-if="ui.logTab==='decisions'" class="space-y-2">
+                <button @click="addDecision" class="w-full px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800">+ Ajouter décision</button>
+                <div class="space-y-2 max-h-[220px] overflow-auto pr-2 code-scroll">
+                  <div v-for="(d, idx) in workshopLog.decisions" :key="d.id" class="p-3 rounded-xl border bg-white">
+                    <div class="flex items-center justify-between">
+                      <div class="text-xs font-extrabold">{{ d.id }}</div>
+                      <button @click="workshopLog.decisions.splice(idx,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                      <input v-model.trim="d.area" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Zone (Sécurité, Mapping, ...)"/>
+                      <input v-model.trim="d.owner" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Owner"/>
+                    </div>
+                    <textarea v-model.trim="d.decision" rows="2" class="mt-2 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Décision"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="ui.logTab==='questions'" class="space-y-2">
+                <button @click="addQuestion" class="w-full px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800">+ Ajouter question</button>
+                <div class="space-y-2 max-h-[220px] overflow-auto pr-2 code-scroll">
+                  <div v-for="(q, idx) in workshopLog.questions" :key="q.id" class="p-3 rounded-xl border bg-white">
+                    <div class="flex items-center justify-between">
+                      <div class="text-xs font-extrabold">{{ q.id }}</div>
+                      <button @click="workshopLog.questions.splice(idx,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                      <input v-model.trim="q.area" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Zone"/>
+                      <select v-model="q.status" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="open">open</option>
+                        <option value="done">done</option>
+                      </select>
+                    </div>
+                    <input v-model.trim="q.owner" class="mt-2 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Owner"/>
+                    <textarea v-model.trim="q.question" rows="2" class="mt-2 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Question"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="ui.logTab==='actions'" class="space-y-2">
+                <button @click="addAction" class="w-full px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-extrabold hover:bg-slate-800">+ Ajouter action</button>
+                <div class="space-y-2 max-h-[220px] overflow-auto pr-2 code-scroll">
+                  <div v-for="(a, idx) in workshopLog.actions" :key="a.id" class="p-3 rounded-xl border bg-white">
+                    <div class="flex items-center justify-between">
+                      <div class="text-xs font-extrabold">{{ a.id }}</div>
+                      <button @click="workshopLog.actions.splice(idx,1)" class="text-xs font-extrabold text-red-600 hover:underline">Supprimer</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                      <input v-model.trim="a.owner" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Owner"/>
+                      <input v-model.trim="a.dueDate" type="date" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"/>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                      <select v-model="a.status" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="open">open</option>
+                        <option value="done">done</option>
+                      </select>
+                      <input v-model.trim="a.area" class="p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Zone"/>
+                    </div>
+                    <textarea v-model.trim="a.action" rows="2" class="mt-2 w-full p-2.5 rounded-xl border bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Action à faire"></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button @click="exportJson"
+                class="bg-slate-900 text-white py-3 rounded-xl font-extrabold hover:bg-slate-800 transition">
+                Export JSON
+              </button>
+              <button @click="exportDevPackZip"
+                class="bg-purple-600 text-white py-3 rounded-xl font-extrabold hover:bg-purple-700 transition">
+                Dev Pack (.zip)
+              </button>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="prevStep" class="flex-1 border border-slate-200 py-3 rounded-xl font-extrabold hover:bg-slate-50 transition">Retour</button>
+              <button @click="gotoStep(1)" class="flex-1 bg-slate-800 text-white py-3 rounded-xl font-extrabold hover:bg-slate-900 transition">Revenir au début</button>
+            </div>
+          </div>
+
+        </section>
+      </aside>
+
+      <!-- Right panel: Live preview -->
+      <main class="col-span-12 lg:col-span-8 space-y-6">
+        <!-- Architecture -->
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-extrabold text-slate-400 uppercase tracking-widest">Architecture</h3>
+              <p class="text-xs text-slate-500 mt-1">Vue simplifiée des flux (Init, Opt-in, Update, Anonymize, Merge).</p>
+            </div>
+            <div class="text-xs text-slate-500">
+              <span class="font-semibold">Update</span> :
+              <span class="font-extrabold" :class="flows.update.transport==='api' ? 'text-blue-700' : 'text-purple-700'">
+                {{ flows.update.transport.toUpperCase() }}
+              </span>
+            </div>
+          </div>
+
+          <div class="mt-5">
+            <svg viewBox="0 0 980 360" class="w-full">
+              <defs>
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L9,3 z" fill="#2563eb"></path>
+                </marker>
+                <marker id="arrow2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L9,3 z" fill="#7c3aed"></path>
+                </marker>
+              </defs>
+
+              <!-- Nodes -->
+              <g>
+                <rect x="40" y="60" width="240" height="90" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+                <text x="160" y="105" text-anchor="middle" class="font-bold fill-slate-800">Activation / Canaux</text>
+                <text x="160" y="128" text-anchor="middle" class="fill-slate-500 text-xs">Email · Web · QR · SMS</text>
+              </g>
+
+              <g>
+                <rect x="370" y="35" width="240" height="95" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+                <text x="490" y="82" text-anchor="middle" class="font-bold fill-slate-800">{{ walletPlatform.vendor }}</text>
+                <text x="490" y="106" text-anchor="middle" class="fill-slate-500 text-xs">Entrypoints · Pass · Push</text>
+              </g>
+
+              <g>
+                <rect x="720" y="60" width="240" height="90" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+                <text x="840" y="105" text-anchor="middle" class="font-bold fill-slate-800">{{ interfaces.sourceSystem.name || 'Système Source' }}</text>
+                <text x="840" y="128" text-anchor="middle" class="fill-slate-500 text-xs">CRM · OMS · API · SFTP</text>
+              </g>
+
+              <g>
+                <rect x="370" y="235" width="240" height="90" rx="16" fill="white" stroke="#e2e8f0" stroke-width="2"/>
+                <text x="490" y="280" text-anchor="middle" class="font-bold fill-slate-800">Device client</text>
+                <text x="490" y="303" text-anchor="middle" class="fill-slate-500 text-xs">Apple Wallet / Google Wallet</text>
+              </g>
+
+              <!-- Flows -->
+              <path d="M 280 105 L 370 85" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow)"/>
+              <text x="320" y="72" class="fill-slate-600 text-xs">Entrypoint URL</text>
+
+              <path d="M 490 130 L 490 235" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow)"/>
+              <text x="505" y="195" class="fill-slate-600 text-xs">Install / Display</text>
+
+              <!-- Init: GetCustomer -->
+              <path d="M 610 75 L 720 90" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+              <text x="650" y="62" class="fill-slate-600 text-xs">GetCustomer</text>
+
+              <!-- Optin -->
+              <path v-if="flows.optin.transport==='api'" d="M 610 105 L 720 120" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+              <text v-if="flows.optin.transport==='api'" x="650" y="142" class="fill-slate-600 text-xs">Opt-in (API)</text>
+
+              <path v-if="flows.optin.transport==='sftp'" d="M 720 155 C 650 190, 650 190, 610 140" fill="none" stroke="#7c3aed" stroke-width="3" marker-end="url(#arrow2)"/>
+              <text v-if="flows.optin.transport==='sftp'" x="650" y="200" class="fill-slate-600 text-xs">Opt-in (SFTP)</text>
+
+              <!-- Updates -->
+              <path v-if="flows.update.transport==='api'" d="M 720 115 L 610 100" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow)"/>
+              <text v-if="flows.update.transport==='api'" x="640" y="92" class="fill-slate-600 text-xs">Update (API)</text>
+
+              <path v-if="flows.update.transport==='sftp'" d="M 720 130 C 650 180, 650 180, 610 140" fill="none" stroke="#7c3aed" stroke-width="3" marker-end="url(#arrow2)"/>
+              <text v-if="flows.update.transport==='sftp'" x="640" y="175" class="fill-slate-600 text-xs">Update (SFTP)</text>
+
+              <!-- Anonymize / Merge -->
+              <path d="M 840 150 L 840 250 L 610 275" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+              <text x="805" y="240" class="fill-slate-600 text-xs">Merge/Anonymize</text>
+            </svg>
+          </div>
+        </section>
+
+        <!-- Preview tabs -->
+        <section class="bg-slate-900 rounded-2xl shadow-lg overflow-hidden border border-slate-800">
+          <div class="flex border-b border-slate-800 overflow-x-auto code-scroll">
+            <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id"
+              :class="[
+                'px-6 py-3 text-[11px] font-extrabold transition whitespace-nowrap tracking-widest uppercase',
+                activeTab === tab.id ? 'text-white border-b-2 border-blue-500 bg-slate-800' : 'text-slate-500 hover:text-slate-300'
+              ]">
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <div class="p-6 overflow-auto code-scroll">
+            <!-- Entrypoints -->
+            <div v-if="activeTab === 'entrypoints'" class="space-y-4">
+              <div class="text-slate-300 text-xs">
+                Campagne active (preview): <span class="text-orange-300 mono">{{ activeCampaignId }}</span>
+              </div>
+
+              <div class="space-y-2">
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">PREPROD (QLF)</div>
+                <div class="bg-slate-800 p-4 rounded-xl break-all border border-slate-700 mono text-sm text-blue-300">
+                  {{ entrypointPreprod }}
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">PROD</div>
+                <div class="bg-slate-800 p-4 rounded-xl break-all border border-slate-700 mono text-sm text-blue-300">
+                  {{ entrypointProd }}
+                </div>
+              </div>
+
+              <div class="text-[11px] text-slate-400">
+                Sécurité : <span class="font-extrabold text-slate-200">{{ security.mode }}</span>
+                <span v-if="security.mode==='sha256' && preview.signature" class="ml-2">
+                  signature preview: <span class="mono text-green-300">{{ preview.signature }}</span>
+                </span>
+                <span v-if="security.mode==='aes256cbc' && preview.aesData" class="ml-2">
+                  data preview: <span class="mono text-purple-300">{{ preview.aesData }}</span>
+                </span>
+                <span v-if="preview.securityError" class="ml-2 text-red-300 font-semibold">
+                  ({{ preview.securityError }})
+                </span>
+              </div>
+            </div>
+
+            <!-- Payloads -->
+            <div v-if="activeTab === 'payloads'" class="space-y-6">
+              <div>
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Opt-in event (exemple)</div>
+                <pre class="text-green-300 text-xs mono bg-slate-800 border border-slate-700 p-4 rounded-xl overflow-auto">{{ pretty(optinEventExample) }}</pre>
+              </div>
+
+              <div>
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Update (Captain Wallet) payload (exemple)</div>
+                <pre class="text-green-300 text-xs mono bg-slate-800 border border-slate-700 p-4 rounded-xl overflow-auto">{{ pretty(cwUpdatePayloadExample) }}</pre>
+              </div>
+
+              <div>
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Anonymize payload (exemple)</div>
+                <pre class="text-green-300 text-xs mono bg-slate-800 border border-slate-700 p-4 rounded-xl overflow-auto">{{ pretty(anonymizePayloadExample) }}</pre>
+              </div>
+
+              <div>
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Merge payload (exemple)</div>
+                <pre class="text-green-300 text-xs mono bg-slate-800 border border-slate-700 p-4 rounded-xl overflow-auto">{{ pretty(mergePayloadExample) }}</pre>
+              </div>
+            </div>
+
+            <!-- Contracts -->
+            <div v-if="activeTab === 'contracts'" class="space-y-6">
+              <div>
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Data contract (JSON)</div>
+                <pre class="text-blue-200 text-xs mono bg-slate-800 border border-slate-700 p-4 rounded-xl overflow-auto">{{ pretty(dataContractResolved) }}</pre>
+              </div>
+              <div>
+                <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">OpenAPI stub (extrait)</div>
+                <pre class="text-blue-200 text-xs mono bg-slate-800 border border-slate-700 p-4 rounded-xl overflow-auto">{{ openApiStubSnippet }}</pre>
+              </div>
+            </div>
+
+            <!-- Errors -->
+            <div v-if="activeTab === 'errors'" class="space-y-3">
+              <div v-if="errors.length===0" class="text-slate-400 text-sm italic">Aucune règle d'erreur.</div>
+              <div v-for="e in errors" :key="e.id" class="p-3 bg-slate-800 rounded-xl border border-slate-700">
+                <div class="flex items-center justify-between">
+                  <div class="text-red-300 font-extrabold uppercase tracking-widest text-xs">{{ e.code || '—' }}</div>
+                  <div class="text-slate-400 text-[11px]">{{ e.category }}</div>
+                </div>
+                <div class="text-slate-200 mt-2">{{ e.messages?.fr || '—' }}</div>
+                <div v-if="project.languages.includes('en')" class="text-slate-400 mt-1 text-[11px]">{{ e.messages?.en || '—' }}</div>
+                <div class="text-slate-400 mt-2 text-[11px]">retry: <span class="text-slate-200 font-semibold">{{ e.retry }}</span> · owner: <span class="text-slate-200 font-semibold">{{ e.owner || '—' }}</span></div>
+              </div>
+            </div>
+
+            <!-- Full spec -->
+            <div v-if="activeTab === 'spec'" class="space-y-4">
+              <div class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Spec (JSON)</div>
+              <pre class="text-slate-200 text-xs mono bg-slate-800 border border-slate-700 p-4 rounded-xl overflow-auto">{{ pretty(specSnapshot) }}</pre>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Import modal -->
+    <div v-if="ui.importModal" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-50">
+      <div class="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
+        <div class="flex items-start justify-between">
+          <div>
+            <h3 class="text-lg font-extrabold">Importer une spec</h3>
+            <p class="text-xs text-slate-500 mt-1">JSON (exporté) ou "share link" (hash).</p>
+          </div>
+          <button @click="ui.importModal=false" class="text-slate-500 hover:text-slate-800 font-extrabold">✕</button>
+        </div>
+
+        <div class="mt-4 space-y-4">
+          <div class="p-4 rounded-2xl border bg-slate-50">
+            <div class="text-xs font-extrabold uppercase text-slate-500">Coller JSON</div>
+            <textarea v-model.trim="ui.importText" rows="8" class="mt-2 w-full p-3 rounded-xl border bg-white focus:ring-2 focus:ring-blue-500 outline-none mono"
+              placeholder='{"meta":{...}}'></textarea>
+            <div class="mt-2 flex gap-2">
+              <button @click="importFromText" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-extrabold hover:bg-blue-700">Importer JSON</button>
+              <button @click="ui.importText=''" class="px-4 py-2 rounded-xl border bg-white font-extrabold hover:bg-slate-50">Vider</button>
+            </div>
+            <div v-if="ui.importError" class="mt-2 text-xs text-red-700">• {{ ui.importError }}</div>
+          </div>
+
+          <div class="p-4 rounded-2xl border bg-slate-50">
+            <div class="text-xs font-extrabold uppercase text-slate-500">Importer depuis un fichier (.json)</div>
+            <input type="file" accept="application/json" @change="importFromFile" />
+          </div>
+
+          <div class="p-4 rounded-2xl border bg-slate-50">
+            <div class="text-xs font-extrabold uppercase text-slate-500">Importer depuis l'URL (hash)</div>
+            <div class="text-xs text-slate-600 mt-1">Si tu as reçu un lien, ouvre-le dans ton navigateur : l'import se fera automatiquement.</div>
+            <button @click="importFromHash" class="mt-2 px-4 py-2 rounded-xl bg-emerald-600 text-white font-extrabold hover:bg-emerald-700">Importer depuis le hash actuel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="mt-8 text-xs text-slate-500">
+      Sauvegarde locale automatique (localStorage). Aucune donnée n'est envoyée. Lien de partage = spec compressée dans l'URL.
+    </footer>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
