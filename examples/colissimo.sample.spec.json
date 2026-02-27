@@ -5,7 +5,7 @@
     "version": "2.0"
   },
   "project": {
-    "name": "Carte Suivi de livraison",
+    "name": "Cas Colissimo",
     "brand": "Colissimo",
     "description": "Carte Wallet multi-statuts pour suivre une livraison (iOS/Android).",
     "timezone": "Europe/Paris",
